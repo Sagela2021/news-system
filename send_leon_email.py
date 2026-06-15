@@ -1,21 +1,12 @@
 import os
-import smtplib
+import requests
+import json
 import re
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from openai import OpenAI # 引入 OpenAI 库，用于调用 DeepSeek API
 
 def generate_academic_report():
-    # 1. 获取你的 DeepSeek API Key（从 GitHub Secret 中读取）
-    api_key = os.environ["DEEPSEEK_API_KEY"]
+    api_key = os.environ["GEMINI_API_KEY"]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
-    # 2. 初始化 DeepSeek 客户端，并使用 OpenAI SDK 调用 DeepSeek API
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.deepseek.com" # DeepSeek 官方 API 端点
-    )
-
-    # 3. 准备好你的提示词 (Prompt)
     prompt = """
     Du bist der leitende Wissenschaftsredakteur für einen hochintelligenten 9-jährigen Jungen.
     Erstelle eine tägliche akademische Kurzzusammenfassung auf Deutsch.
@@ -39,58 +30,63 @@ def generate_academic_report():
     Kein Markdown, keine Codeblöcke, keine weiteren Erklärungen.
     """
 
-    # 4. 调用 DeepSeek API
-    try:
-        response = client.chat.completions.create(
-            model="deepseek-chat", # 模型名称
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,       # 控制随机性
-            max_tokens=8192        # 最大输出长度
-        )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.8,
+            "maxOutputTokens": 8192
+        }
+    }
 
-        # 5. 处理 API 返回的内容
-        raw = response.choices[0].message.content
-        raw = raw.replace("```html", "").replace("```", "").strip()
+    response = requests.post(
+        url,
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(payload)
+    )
 
-        # 6. 提取邮件主题 (Subject)
-        subject = "🔬 Wissenschaft des Tages"  # 一个备用主题
-        match = re.search(r"SUBJECT:\s*(.+)", raw)
-        if match:
-            subject = match.group(1).strip()
-            # 将主题行从内容中移除，确保它不会出现在邮件正文里
-            raw = raw[raw.find("<!DOCTYPE"):]
+    result = response.json()
 
-        return raw, subject
+    if "error" in result:
+        raise Exception(f"Gemini API Fehler: {result['error']['message']}")
 
-    except Exception as e:
-        print(f"❌ API 调用失败: {e}")
-        raise
+    raw = result["candidates"][0]["content"]["parts"][0]["text"]
+    raw = raw.replace("```html", "").replace("```", "").strip()
+
+    # Betreff aus erster Zeile extrahieren
+    subject = "🔬 Wissenschaft des Tages"  # Fallback
+    match = re.search(r"SUBJECT:\s*(.+)", raw)
+    if match:
+        subject = match.group(1).strip()
+        raw = raw[raw.find("<!DOCTYPE"):]
+
+    return raw, subject
+
 
 def send_email(html_content, subject):
-    """使用你的 Gmail 账户发送邮件，此部分代码无需修改"""
-    sender = os.environ["SENDER_EMAIL"]
-    password = os.environ["GMAIL_APP_PASSWORD"]
-    receiver = os.environ["RECEIVER_EMAIL"]
+    api_key = os.environ["RESEND_API_KEY"]
+    receiver_email = os.environ["RECEIVER_EMAIL"]
 
-    msg = MIMEMultipart()
-    msg['From'] = f"🌐 Wissenschafts-Brief <{sender}>"
-    msg['To'] = receiver
-    msg['Subject'] = subject
+    url = "https://api.resend.com/emails"
 
-    msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
 
-    try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(sender, password)
-        server.sendmail(sender, [receiver], msg.as_string())
-        server.close()
+    payload = {
+        "from": "Wissenschafts-Brief <onboarding@resend.dev>",
+        "to": [receiver_email],
+        "subject": subject,
+        "html": html_content
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code in (200, 201):
         print(f"✅ E-Mail erfolgreich gesendet: {subject}")
-    except Exception as e:
-        print(f"❌ Fehler beim Senden: {e}")
-        raise
-
+    else:
+        print(f"❌ Fehler beim Senden: {response.status_code} - {response.text}")
+        raise Exception(f"Resend API Fehler: {response.text}")
 
 if __name__ == "__main__":
     print("Generiere heutigen Inhalt...")
