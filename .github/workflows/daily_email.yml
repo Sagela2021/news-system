@@ -25,6 +25,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: python send_leon_email.py
 
       - name: Debug environment variables
