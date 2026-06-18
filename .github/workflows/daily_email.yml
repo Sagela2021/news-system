@@ -8,7 +8,6 @@ on:
 jobs:
   send-email:
     runs-on: ubuntu-latest
-
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -26,7 +25,9 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-              - name: Debug environment variables
+        run: python send_leon_email.py
+
+      - name: Debug environment variables
         run: |
           if [ -z "$DEEPSEEK_API_KEY" ]; then echo "DEEPSEEK_API_KEY is NOT set"; else echo "DEEPSEEK_API_KEY is set (length:${#DEEPSEEK_API_KEY})"; fi
           if [ -z "$RESEND_API_KEY" ]; then echo "RESEND_API_KEY is NOT set"; else echo "RESEND_API_KEY is set (length:${#RESEND_API_KEY})"; fi
